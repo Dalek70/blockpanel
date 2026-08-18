@@ -38,7 +38,12 @@ cp README.md "$STAGE/"
 # GitHub release assets: zip + standalone binaries + checksums.
 cp "$OUT/$NAME.zip" "$UPLOAD/"
 cp "$STAGE"/bin/blockpanel-* "$UPLOAD/"
-(cd "$UPLOAD" && shasum -a 256 blockpanel-* > SHA256SUMS)
+# shasum on macOS, sha256sum on Linux CI runners.
+if command -v shasum >/dev/null 2>&1; then
+  (cd "$UPLOAD" && shasum -a 256 blockpanel-* > SHA256SUMS)
+else
+  (cd "$UPLOAD" && sha256sum blockpanel-* > SHA256SUMS)
+fi
 
 echo "release zip:    $OUT/$NAME.zip"
 echo "github assets:  $UPLOAD/  (upload ALL of these to the v$VERSION release)"

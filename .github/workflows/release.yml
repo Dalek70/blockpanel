@@ -1,0 +1,67 @@
+# Auto-release: every push to main is vetted, tested and cross-compiled.
+# A GitHub release is published automatically when the version in
+# internal/version/version.go has no release yet — so shipping an update is:
+# bump `Current`, commit, push. Commits that don't bump the version still get
+# the full build + test run, they just skip the publish step.
+#
+# The published assets (zip + per-platform binaries + SHA256SUMS) are exactly
+# what the panel's built-in updater expects.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Vet & test
+        run: |
+          go vet ./...
+          go test ./...
+
+      - name: Read version
+        id: v
+        run: |
+          VERSION=$(grep 'const Current' internal/version/version.go | sed 's/.*"\(.*\)".*/\1/')
+          [ -n "$VERSION" ] || { echo "could not read version"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Check if already released
+        id: released
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v${{ steps.v.outputs.version }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "released v${{ steps.v.outputs.version }} exists — building only, no publish"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build all platforms
+        run: sh scripts/build-release.sh
+
+      - name: Publish release
+        if: steps.released.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" dist/upload/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "BlockPanel v${{ steps.v.outputs.version }}" \
+            --generate-notes

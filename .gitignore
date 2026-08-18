@@ -1,0 +1,13 @@
+# build output — binaries go to GitHub releases, not the repo
+/dist/
+/blockpanel
+/blockpanel-*
+*.previous
+
+# runtime/dev data — server files, worlds, panel.json (password hashes, API keys)
+/data/
+/devdata/
+/featdata/
+
+# OS noise
+.DS_Store
